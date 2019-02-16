@@ -7,14 +7,14 @@ OpenCV is a rich environment which can be configured in many different ways. You
 
 The buildOpenCV script has two optional command line parameters:
 
-<ul>
-<li>-s | --sourcedir   Directory in which to place the opencv sources (default $HOME)</li>
-<li>-i | --installdir  Directory in which to install opencv libraries (default /usr/local)</li>
-</ul>
+* -s | --sourcedir   Directory in which to place the opencv sources (default $HOME)
+* -i | --installdir  Directory in which to install opencv libraries (default /usr/local)
 
 To run the the build file:
 
+```bash
 $ ./buildOpenCV.sh -s &lt;file directory&gt;
+```
 
 This example will build OpenCV in the given file directory and install OpenCV in the /usr/local directory.
 
@@ -28,15 +28,14 @@ The folder ~/opencv and ~/opencv_extras contain the source, build and extra data
 
 $ ./removeOpenCVSources.sh
 
-<h3>Packaging</h3>
+### Packaging
+
 An alternative build script, buildAndPackageOpenCV.sh , will build the OpenCV package as described above and the build .deb files using the standard OpenCV mechanism defined using the CPACK_BINARY_DEB=ON in the OpenCV Make file. See the script.
 
 The buildAndPackageOpenCV script has two optional command line parameters:
 
-<ul>
-<li>-s | --sourcedir   Directory in which to place the opencv sources (default $HOME)</li>
-<li>-i | --installdir  Directory in which to install opencv libraries (default /usr/local)</li>
-</ul>
+* -s | --sourcedir   Directory in which to place the opencv sources (default $HOME)</li>
+* -i | --installdir  Directory in which to install opencv libraries (default /usr/local)</li>
 
 To run the the build file:
 
@@ -46,8 +45,7 @@ This example will build OpenCV in the given file directory and install OpenCV in
 
 The corresponding .deb files will be in the &lt;file directory&gt;/opencv/build directory in .deb file and compressed forms. 
 
-<h4>Installing .deb files</h4>
-
+#### Installing .deb files
 To install .deb files:
 
 Switch to the directory where the .deb files are located. Then:

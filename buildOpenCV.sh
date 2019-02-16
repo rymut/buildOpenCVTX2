@@ -3,17 +3,29 @@
 # Copyright(c) JetsonHacks (2017-2018)
 
 OPENCV_VERSION=3.4.1
-# Jetson TX2
+# Default build for Jetson TX2
+# ARCH_BIN=5.3 will be set if Jetson TX1 was detected by jetson_variables script
 ARCH_BIN=6.2
-# Jetson TX1
-# ARCH_BIN=5.3
 INSTALL_DIR=/usr/local
 # Download the opencv_extras repository
-# If you are installing the opencv testdata, ie
-#  OPENCV_TEST_DATA_PATH=../opencv_extra/testdata
-# Make sure that you set this to YES
-# Value should be YES or NO
-DOWNLOAD_OPENCV_EXTRAS=YES
+DOWNLOAD_OPENCV_EXTRAS=NO
+# Build modules from opencv_contrib
+BUILD_OPENCV_CONTRIB=NO
+# Build OpenCV DEB package
+BUILD_OPENCV_PACKAGE=NO
+# Custom cmake defines
+CMAKE_DEFINES=""
+# Install OpenCV after the build was compleate
+INSTALL_OPENCV=NO
+# Install OpenCV tests
+INSTALL_OPENCV_TESTS=NO
+# Install OpenCV Python Examples
+INSTALL_OPENCV_EXAMPLES_PYTHON=NO
+# Install OpenCV C Examples
+INSTALL_OPENCV_EXAMPLES_C=NO
+# Remove OpenCV sources and exit the script
+REMOVE_OPENCV_SOURCES=NO
+
 # Source code directory
 OPENCV_SOURCE_DIR=$HOME
 WHEREAMI=$PWD
@@ -22,33 +34,114 @@ CLEANUP=true
 
 function usage
 {
-    echo "usage: ./buildOpenCVTX1.sh [[-s sourcedir ] | [-h]]"
-    echo "-s | --sourcedir   Directory in which to place the opencv sources (default $HOME)"
-    echo "-i | --installdir  Directory in which to install opencv libraries (default /usr/local)"
-    echo "-h | --help  This message"
+    echo "usage: "
+    echo "./buildOpenCV.sh [-s sourcedir] [-i installdir]"
+    echo "                 [-d cmakedefs] [-d cmakedef] "
+    echo "                 [-P] [-I] [-C] [-e] [-t] [-c] [-p] [-h]"
+    echo "Build OpenCV"
+    echo ""
+    echo "./buildOpenCV.sh remove [-s sourcedir] [-h]"
+    echo "Remove OpenCV sources"
+    echo ""
+    echo "-s | --sourcedir        Directory in which to place the sources and extras"
+    echo "                        (default $HOME)"
+    echo "-i | --installdir       Directory in which to install opencv libraries "
+    echo "                        (default /usr/local)"
+    echo "-d | --define           Define custom flags for OpenCV cmake, example: "
+    echo "                        -d \"CMAKE_INSTALL_PREFIX=/opt WITH_QT=ON\""
+    echo "-D | --cmake-define     Define single cmake flag (use as cmake -D), example"
+    echo "                        -D CMAKE_INSTALL_PREFIX=/opt"
+    echo "-P | --package          Build DEB packages"
+    echo "-I | --install          Install opencv after build"
+    echo "-C | --contrib          Download and compile opencv_contrib modules"
+    echo "-e | --extras           Download opencv_extras repository"
+    echo "-t | --tests            Build tests"
+    echo "-c | --c-examples       Build C examples"
+    echo "-p | --python-examples  Build Python examples"
+    echo "-h | --help             Show help"
 }
 
 # Iterate through command line inputs
 while [ "$1" != "" ]; do
     case $1 in
-        -s | --sourcedir )      shift
-				OPENCV_SOURCE_DIR=$1
-                                ;;
-        -i | --installdir )     shift
-                                INSTALL_DIR=$1
-                                ;;
-        -h | --help )           usage
-                                exit
-                                ;;
-        * )                     usage
-                                exit 1
+        -s | --sourcedir )        shift
+                                  OPENCV_SOURCE_DIR=$1
+                                  ;;
+        -i | --installdir )       shift
+                                  INSTALL_DIR=$1
+                                  ;;
+        -d | --define )           shift
+                                  CMAKE_OPENCV_DEFINES="$CMAKE_OPENCV_DEFINES $1"
+                                  ;;
+        -D | --cmake-define )     shift
+                                  CMAKE_OPENCV_DEFINES="$CMAKE_OPENCV_DEFINES -D $1"
+                                  ;;
+        -p | --package )          BUILD_OPENCV_PACKAGE=YES
+                                  ;;
+        -I | --install )          INSTALL_OPENCV=YES
+                                  ;;
+        -C | --contrib )          BUILD_OPENCV_CONTRIB=YES
+                                  ;;
+        -e | --extras )           DOWNLOAD_OPENCV_EXTRAS=YES
+                                  ;;
+        -t | --tests )            INSTALL_OPENCV_TESTS=YES
+                                  ;;
+        -c | --c-examples )       INSTALL_OPENCV_EXAMPLES_C=YES
+                                  ;;
+        -p | --python-examples )  INSTALL_OPENCV_EXAMPLES_PYTHON=YES
+                                  ;;
+        remove )                  REMOVE_OPENCV_SOURCES=YES
+                                  ;;
+        -h | --help )             usage
+                                  exit
+                                  ;;
+        * )                       usage
+                                  exit 1
     esac
     shift
 done
 
+if [ $REMOVE_OPENCV_SOURCES == "YES" ] ; then
+    echo "Removing opencv directory from $OPENCV_SOURCE_DIR"
+    cd $OPENCV_SOURCE_DIR
+
+    if [ -d "opencv" ] ; then
+        if [ -L "opencv" ] ; then
+            echo "opencv is a symlink, unable to remove"
+        else
+            echo "Removing opencv sources"
+            sudo rm -r opencv
+        fi
+    else
+        echo "Could not find opencv directory"
+    fi
+
+    if [ -d "opencv_extra" ] ; then
+        if [ -L "opencv_extra" ] ; then
+            echo "opencv_extra is a symlink, unable to remove"
+        else
+            echo "Removing opencv_extra sources"
+            sudo rm -r opencv_extra
+        fi
+    fi
+
+    if [ -d "opencv_contrib" ] ; then
+        if [ -L "opencv_contrib" ] ; then
+            echo "opencv_contrib is a symlink, unable to remove"
+        else
+            echo "Removing opencv_contrib sources"
+            sudo rm -r opencv_contrib
+        fi
+    fi
+    exit
+fi
+
 CMAKE_INSTALL_PREFIX=$INSTALL_DIR
 
 source scripts/jetson_variables.sh
+if [ $JETSON_BOARD == "TX1" ] ; then
+    ARCH_BIN=5.3
+fi
 
 # Print out the current configuration
 echo "Build configuration: "
@@ -56,10 +149,14 @@ echo " NVIDIA Jetson $JETSON_BOARD"
 echo " Operating System: $JETSON_L4T_STRING [Jetpack $JETSON_JETPACK]"
 echo " Current OpenCV Installation: $JETSON_OPENCV"
 echo " OpenCV binaries will be installed in: $CMAKE_INSTALL_PREFIX"
-echo " OpenCV Source will be installed in: $OPENCV_SOURCE_DIR"
+echo " OpenCV Source will be installed in: $OPENCV_SOURCE_DIR/opencv"
 
 if [ $DOWNLOAD_OPENCV_EXTRAS == "YES" ] ; then
- echo "Also installing opencv_extras"
+    echo "OpenCV Extras will be installed in: $OPENCV_SOURCE_DIR/opencv_extra"
+fi
+
+if [ $BUILD_OPENCV_CONTRIB == "YES" ]; then
+    echo "OpenCV Contrib sources will be installed in: $OPENCV_SOURCE_DIR/opencv_contrib"
 fi
 
 # Repository setup
@@ -93,7 +190,7 @@ sudo apt-get install -y \
 
 # https://devtalk.nvidia.com/default/topic/1007290/jetson-tx2/building-opencv-with-opengl-support-/post/5141945/#5141945
 cd /usr/local/cuda/include
-sudo patch -N cuda_gl_interop.h $WHEREAMI'/patches/OpenGLHeader.patch' 
+sudo patch -N cuda_gl_interop.h $WHEREAMI'/patches/OpenGLHeader.patch'
 # Clean up the OpenGL tegra libs that usually get crushed
 cd /usr/lib/aarch64-linux-gnu/
 sudo ln -sf tegra/libGL.so libGL.so
@@ -104,32 +201,48 @@ sudo apt-get install -y python-dev python-numpy python-py python-pytest
 sudo apt-get install -y python3-dev python3-numpy python3-py python3-pytest
 
 # GStreamer support
-sudo apt-get install -y libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev 
+sudo apt-get install -y libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev
 
 cd $OPENCV_SOURCE_DIR
 git clone https://github.com/opencv/opencv.git
 cd opencv
 git checkout -b v${OPENCV_VERSION} ${OPENCV_VERSION}
 if [ $OPENCV_VERSION = 3.4.1 ] ; then
-  # For 3.4.1, use this commit to fix samples/gpu/CMakeLists.txt
-  git merge ec0bb66
-  # For 3.4.1, use this to fix C compilation issues (like in YOLO)
-  git cherry-pick 549b5df
+    # For 3.4.1, use this commit to fix samples/gpu/CMakeLists.txt
+    git merge ec0bb66
+    # For 3.4.1, use this to fix C compilation issues (like in YOLO)
+    git cherry-pick 549b5df
+fi
+
+if [ $BUILD_OPENCV_CONTRIB == "YES" ] ; then
+    # This is for opencv_contrib
+    cd $OPENCV_SOURCE_DIR
+    git clone https://github.com/opencv/opencv_contrib.git
+    cd opencv_contrib
+    git checkout -b v${OPENCV_VERSION} ${OPENCV_VERSION}
+
+	CMAKE_DEFINES=" -D OPENCV_EXTRA_MODULES_PATH=$OPENCV_SOURCE_DIR/opencv_contrib/modules -D BUILD_opencv_legacy=OFF $CMAKE_DEFINES"
+
+fi
+
+if [ $INSTALL_OPENCV_TESTS == "YES" ] ; then
+    DOWNLOAD_OPENCV_EXTRAS=YES
+	CMAKE_DEFINES="$CMAKE_DEFINES -D INSTALL_TESTS=ON -D OPENCV_TEST_DATA_PATH=${OPENCV_SOURCE_DIR}/opencv_extra/testdata"
 fi
 
 if [ $DOWNLOAD_OPENCV_EXTRAS == "YES" ] ; then
- echo "Installing opencv_extras"
- # This is for the test data
- # cd $OPENCV_SOURCE_DIR
- # git clone https://github.com/opencv/opencv_extra.git
- # cd opencv_extra
+    echo "Installing opencv_extras"
+    # This is for the test data
+    cd $OPENCV_SOURCE_DIR
+    git clone https://github.com/opencv/opencv_extra.git
+    cd opencv_extra
+fi
 
- # This is for opencv_contrib
- cd $OPENCV_SOURCE_DIR
- git clone https://github.com/opencv/opencv_contrib.git
- cd opencv_contrib
-
- git checkout -b v${OPENCV_VERSION} ${OPENCV_VERSION}
+if [ $INSTALL_OPENCV_EXAMPLES_C == "YES" ] ; then
+	CMAKE_DEFINES="$CMAKE_DEFINES -D INSTALL_C_EXAMPLES=ON"
+fi
+if [ $INSTALL_OPENCV_EXAMPLES_C == "YES" ] ; then
+	CMAKE_DEFINES="$CMAKE_DEFINES -D INSTALL_PYTHON_EXAMPLES=ON"
 fi
 
 cd $OPENCV_SOURCE_DIR/opencv
@@ -143,69 +256,99 @@ cd build
 #     -D INSTALL_PYTHON_EXAMPLES=ON \
 # There are also switches which tell CMAKE to build the samples and tests
 # Check OpenCV documentation for details
-
+# For setting additional cmake options use [-d defines] option
+# example : -d "-D INSTALL_TESTS=ON -D INSTALL_C_EXAMPLES=ON"
+# Alternatively use [-D define] or [--cmake-define define] option
 time cmake -D CMAKE_BUILD_TYPE=RELEASE \
-      -D CMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX} \
-      -D WITH_CUDA=ON \
-      -D CUDA_ARCH_BIN=${ARCH_BIN} \
-      -D CUDA_ARCH_PTX="" \
-      -D ENABLE_FAST_MATH=ON \
-      -D CUDA_FAST_MATH=ON \
-      -D WITH_CUBLAS=ON \
-      -D WITH_LIBV4L=ON \
-      -D WITH_GSTREAMER=ON \
-      -D WITH_GSTREAMER_0_10=OFF \
-      -D WITH_QT=ON \
-      -D WITH_OPENGL=ON \
-      -D OPENCV_EXTRA_MODULES_PATH=/home/nvidia/opencv_contrib/modules \
-      -D BUILD_opencv_legacy=OFF \
-      ../
+    -D CMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX} \
+    -D CPACK_PACKAGE_DEFAULT_LOCATION=${CMAKE_INSTALL_PREFIX} \
+	-D CPACK_SET_DESTDIR=ON \
+    -D WITH_CUDA=ON \
+    -D CUDA_ARCH_BIN=${ARCH_BIN} \
+    -D CUDA_ARCH_PTX="" \
+    -D ENABLE_FAST_MATH=ON \
+    -D CUDA_FAST_MATH=ON \
+    -D WITH_CUBLAS=ON \
+    -D WITH_LIBV4L=ON \
+    -D WITH_GSTREAMER=ON \
+    -D WITH_GSTREAMER_0_10=OFF \
+    -D WITH_QT=ON \
+    -D WITH_OPENGL=ON \
+	$CMAKE_DEFINES \
+    ../
 
 if [ $? -eq 0 ] ; then
-  echo "CMake configuration make successful"
+    echo "CMake configuration make successful"
 else
-  # Try to make again
-  echo "CMake issues " >&2
-  echo "Please check the configuration being used"
-  exit 1
+    # Try to make again
+    echo "CMake issues " >&2
+    echo "Please check the configuration being used"
+    exit 1
 fi
 
 # Consider $ sudo nvpmodel -m 2 or $ sudo nvpmodel -m 0
 NUM_CPU=$(nproc)
 time make -j$(($NUM_CPU - 1))
 if [ $? -eq 0 ] ; then
-  echo "OpenCV make successful"
-else
-  # Try to make again; Sometimes there are issues with the build
-  # because of lack of resources or concurrency issues
-  echo "Make did not build " >&2
-  echo "Retrying ... "
-  # Single thread this time
-  make
-  if [ $? -eq 0 ] ; then
     echo "OpenCV make successful"
-  else
-    # Try to make again
-    echo "Make did not successfully build" >&2
-    echo "Please fix issues and retry build"
-    exit 1
-  fi
-fi
-
-echo "Installing ... "
-sudo make install
-if [ $? -eq 0 ] ; then
-   echo "OpenCV installed in: $CMAKE_INSTALL_PREFIX"
 else
-   echo "There was an issue with the final installation"
-   exit 1
+    # Try to make again; Sometimes there are issues with the build
+    # because of lack of resources or concurrency issues
+    echo "Make did not build " >&2
+    echo "Retrying ... "
+    # Single thread this time
+    make
+    if [ $? -eq 0 ] ; then
+        echo "OpenCV make successful"
+    else
+        # Try to make again
+        echo "Make did not successfully build" >&2
+        echo "Please fix issues and retry build"
+        exit 1
+    fi
 fi
 
-# check installation
-IMPORT_CHECK="$(python -c "import cv2 ; print cv2.__version__")"
-if [[ $IMPORT_CHECK != *$OPENCV_VERSION* ]]; then
-  echo "There was an error loading OpenCV in the Python sanity test."
-  echo "The loaded version does not match the version built here."
-  echo "Please check the installation."
-  echo "The first check should be the PYTHONPATH environment variable."
+if [ $INSTALL_OPENCV == "YES" ] ; then
+   echo "Installing ... "
+   sudo make install
+   if [ $? -eq 0 ] ; then
+        echo "OpenCV installed in: $CMAKE_INSTALL_PREFIX"
+   else
+        echo "There was an issue with the final installation"
+        exit 1
+    fi
+
+    # check installation
+    IMPORT_CHECK="$(python -c "import cv2 ; print cv2.__version__")"
+    if [[ $IMPORT_CHECK != *$OPENCV_VERSION* ]]; then
+        echo "There was an error loading OpenCV in the Python sanity test."
+        echo "The loaded version does not match the version built here."
+        echo "Please check the installation."
+        echo "The first check should be the PYTHONPATH environment variable."
+    fi
+fi
+
+if [ $BUILD_OPENCV_PACKAGE == "YES" ] ; then
+    echo "Packaging..."
+    sudo ldconfig
+    NUM_CPU=$(nproc)
+    time sudo make package -j$(($NUM_CPU - 1))
+    if [ $? -eq 0 ] ; then
+        echo "OpenCV make package successful"
+    else
+        # Try to make again; Sometimes there are issues with the build
+        # because of lack of resources or concurrency issues
+        echo "Make package did not build " >&2
+        echo "Retrying ... "
+        # Single thread this time
+        sudo make package
+        if [ $? -eq 0 ] ; then
+            echo "OpenCV make package successful"
+        else
+            # Try to make again
+            echo "Make package did not successfully build" >&2
+            echo "Please fix issues and retry build"
+            exit 1
+        fi
+    fi
 fi
